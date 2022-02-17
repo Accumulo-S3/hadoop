@@ -1315,6 +1315,10 @@ public class YarnConfiguration extends Configuration {
   public static final String NM_LOCAL_DIRS = NM_PREFIX + "local-dirs";
   public static final String DEFAULT_NM_LOCAL_DIRS = "/tmp/nm-local-dir";
 
+  /**Should modification time be used to verify localized files.*/
+  public static final String NM_DOWNLOAD_VERIFICATION_ENABLED = NM_PREFIX + "download.verification.enabled";
+  public static final String DEFAULT_NM_DOWNLOAD_VERIFICATION_ENABLED = "true";
+
   /**
    * Number of files in each localized directories
    * Avoid tuning this too low. 

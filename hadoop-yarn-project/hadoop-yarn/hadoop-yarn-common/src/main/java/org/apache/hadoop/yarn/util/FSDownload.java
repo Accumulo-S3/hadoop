@@ -60,7 +60,9 @@ import org.apache.hadoop.thirdparty.com.google.common.cache.LoadingCache;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.Futures;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 
-/**
+import static org.apache.hadoop.yarn.conf.YarnConfiguration.NM_DOWNLOAD_VERIFICATION_ENABLED;
+
+ /**
  * Download a single URL to the local disk.
  *
  */
@@ -269,7 +271,8 @@ public class FSDownload implements Callable<Path> {
     }
     FileSystem sourceFs = sCopy.getFileSystem(conf);
     FileStatus sStat = sourceFs.getFileStatus(sCopy);
-    if (sStat.getModificationTime() != resource.getTimestamp()) {
+    if (conf.getBoolean(NM_DOWNLOAD_VERIFICATION_ENABLED, true) &&
+        sStat.getModificationTime() != resource.getTimestamp()) {
       throw new IOException("Resource " + sCopy + " changed on src filesystem" +
           " - expected: " +
           "\"" + Times.formatISO8601(resource.getTimestamp()) + "\"" +
