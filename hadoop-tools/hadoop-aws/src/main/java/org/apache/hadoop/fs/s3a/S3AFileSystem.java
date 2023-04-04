@@ -1725,7 +1725,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
                 DOWNGRADE_SYNCABLE_EXCEPTIONS_DEFAULT))
         .withCSEEnabled(isCSEEnabled);
     return new FSDataOutputStream(
-        new S3ABlockOutputStream(builder),
+        new S3AFlushableOutputStream(builder),
         null);
   }
 
