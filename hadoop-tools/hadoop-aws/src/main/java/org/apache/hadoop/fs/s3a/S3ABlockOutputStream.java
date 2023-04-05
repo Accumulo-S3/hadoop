@@ -18,13 +18,19 @@
 
 package org.apache.hadoop.fs.s3a;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -41,6 +47,7 @@ import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
+import org.apache.hadoop.thirdparty.com.google.common.base.Predicate;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.Futures;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ListenableFuture;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ListeningExecutorService;
@@ -158,6 +165,10 @@ class S3ABlockOutputStream extends OutputStream implements
   /** is client side encryption enabled? */
   private final boolean isCSEEnabled;
 
+  private final boolean flushEnabled;
+
+  private final List<S3ADataBlocks.DataBlock> flushableBlocks;
+
   /**
    * An S3A output stream which uploads partitions in a separate pool of
    * threads; different {@link S3ADataBlocks.BlockFactory}
@@ -193,6 +204,13 @@ class S3ABlockOutputStream extends OutputStream implements
       initMultipartUpload();
     }
     this.isCSEEnabled = builder.isCSEEnabled;
+
+    this.flushEnabled = true; // TODO set with builder
+    if (flushEnabled) {
+      this.flushableBlocks = Collections.synchronizedList(new LinkedList<>());
+    } else {
+      this.flushableBlocks = null;
+    }
   }
 
   /**
@@ -219,6 +237,13 @@ class S3ABlockOutputStream extends OutputStream implements
    */
   private synchronized S3ADataBlocks.DataBlock getActiveBlock() {
     return activeBlock;
+  }
+
+  private synchronized boolean storeFlushableBlock(S3ADataBlocks.DataBlock block) {
+    if(flushEnabled) {
+      return flushableBlocks.add(block);
+    }
+    return false;
   }
 
   /**
@@ -265,9 +290,17 @@ class S3ABlockOutputStream extends OutputStream implements
       LOG.warn("Stream closed: " + e.getMessage());
       return;
     }
-    S3ADataBlocks.DataBlock dataBlock = getActiveBlock();
-    if (dataBlock != null) {
-      dataBlock.flush();
+    // upload the current block flagged so S3 recognizes the upload as complete
+    uploadCurrentBlock(true);
+
+    // reset multipart upload
+    this.multiPartUpload = null;
+    this.bytesSubmitted = 0;
+    initMultipartUpload();
+
+    // upload the previous blocks again as parts in a new multipart upload
+    for(Iterator<S3ADataBlocks.DataBlock> blockIter = flushableBlocks.iterator(); blockIter.hasNext(); ) {
+      multiPartUpload.uploadBlockAsync(blockIter.next(), false);
     }
   }
 
@@ -443,6 +476,27 @@ class S3ABlockOutputStream extends OutputStream implements
    * and pushes out statistics.
    */
   private synchronized void cleanupOnClose() {
+
+    cleanupWithLogger(LOG, getActiveBlock(), blockFactory);
+    cleanupWithLogger(LOG, flushableBlocks.toArray(Closeable[]::new));
+    LOG.debug("Statistics: {}", statistics);
+    cleanupWithLogger(LOG, statistics);
+    clearActiveBlock();
+  }
+
+  /**
+   *
+   */
+  private synchronized void cleanupOnUpload(Closeable... closeables) {
+
+    if(!flushEnabled) {
+      cleanupWithLogger(LOG, closeables);
+    } else {
+      Closeable[] toclean = Arrays.stream(closeables)
+              .filter(x -> !(x instanceof S3ADataBlocks.DataBlock))
+              .toArray(Closeable[]::new);
+      cleanupWithLogger(LOG, toclean);
+    }
     cleanupWithLogger(LOG, getActiveBlock(), blockFactory);
     LOG.debug("Statistics: {}", statistics);
     cleanupWithLogger(LOG, statistics);
@@ -776,6 +830,7 @@ class S3ABlockOutputStream extends OutputStream implements
       LOG.debug("Queueing upload of {} for upload {}", block, uploadId);
       Preconditions.checkNotNull(uploadId, "Null uploadId");
       maybeRethrowUploadFailure();
+      storeFlushableBlock(block);
       partsSubmitted++;
       final int size = block.dataSize();
       bytesSubmitted += size;

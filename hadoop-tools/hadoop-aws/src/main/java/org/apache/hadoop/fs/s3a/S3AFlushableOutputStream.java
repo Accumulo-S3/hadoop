@@ -4,6 +4,7 @@ import org.apache.hadoop.fs.Abortable;
 import org.apache.hadoop.fs.StreamCapabilities;
 import org.apache.hadoop.fs.Syncable;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
+import org.apache.hadoop.fs.statistics.DurationTracker;
 import org.apache.hadoop.fs.statistics.IOStatisticsSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,12 +17,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_MULTIPART_SIZE;
+import static org.apache.hadoop.fs.s3a.Statistic.INVOCATION_ABORT;
+
 public class S3AFlushableOutputStream extends OutputStream implements
         StreamCapabilities, IOStatisticsSource, Syncable, Abortable {
     public static final Logger LOG = LoggerFactory.getLogger(S3AFlushableOutputStream.class);
 
     // TODO initialize to have an initial size of fs.s3a.multipart.size
-    private final List<Byte> bytes = Collections.synchronizedList(new ArrayList<>());
+    private final List<Byte> bytes;
 
     private final S3ABlockOutputStream.BlockOutputStreamBuilder builder;
 
@@ -31,6 +35,7 @@ public class S3AFlushableOutputStream extends OutputStream implements
             throws IOException {
         this.closed = new AtomicBoolean(false);
         this.builder = builder;
+        this.bytes = Collections.synchronizedList(new ArrayList<>((int) DEFAULT_MULTIPART_SIZE));
         touch();
     }
 
@@ -114,6 +119,6 @@ public class S3AFlushableOutputStream extends OutputStream implements
     @Override
     public void close() throws IOException {
         this.closed = new AtomicBoolean(true);
-        hflush();
+        flush();
     }
 }
