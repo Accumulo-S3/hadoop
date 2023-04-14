@@ -185,6 +185,19 @@ final class S3ADataBlocks {
         throws IOException;
 
     /**
+     * Create a block.
+     *
+     * @param key the object in s3 that the block is belonging to
+     * @param index index of block
+     * @param limit limit of the block.
+     * @param statistics stats to work with
+     * @return a new block.
+     */
+    abstract DataBlock create(String key, long index, int limit,
+                              BlockOutputStreamStatistics statistics)
+            throws IOException;
+
+    /**
      * Implement any close/cleanup operation.
      * Base class is a no-op
      * @throws IOException Inherited exception; implementations should
@@ -397,6 +410,13 @@ final class S3ADataBlocks {
       return new ByteArrayBlock(0, limit, statistics);
     }
 
+    @Override
+    DataBlock create(String key, long index, int limit,
+                     BlockOutputStreamStatistics statistics)
+            throws IOException {
+      return new ByteArrayBlock(0, limit, statistics);
+    }
+
   }
 
   static class S3AByteArrayOutputStream extends ByteArrayOutputStream {
@@ -517,6 +537,13 @@ final class S3ADataBlocks {
     ByteBufferBlock create(long index, int limit,
         BlockOutputStreamStatistics statistics)
         throws IOException {
+      return new ByteBufferBlock(index, limit, statistics);
+    }
+
+    @Override
+    ByteBufferBlock create(String key, long index, int limit,
+                           BlockOutputStreamStatistics statistics)
+            throws IOException {
       return new ByteBufferBlock(index, limit, statistics);
     }
 
@@ -816,6 +843,34 @@ final class S3ADataBlocks {
           .createTmpFileForWrite(String.format("s3ablock-%04d-", index),
               limit, getOwner().getConf());
       return new DiskBlock(destFile, limit, index, statistics);
+    }
+
+    /**
+     * Create a temp file and a {@link DiskBlock} instance to manage it.
+     *
+     * @param index block index
+     * @param limit limit of the block.
+     * @param statistics statistics to update
+     * @return the new block
+     * @throws IOException IO problems
+     */
+    @Override
+    DataBlock create(String key,
+                     long index,
+                     int limit,
+                     BlockOutputStreamStatistics statistics)
+            throws IOException {
+      File destFile = getOwner()
+              .createTmpFileForWrite(String.format("s3ablock-%04d-%s-", index, escapeKey(key)),
+                      limit, getOwner().getConf());
+      return new DiskBlock(destFile, limit, index, statistics);
+    }
+
+    private static String escapeKey(String key) {
+      // escape slashes from the file name
+      String escapedKey = key.replace("/", "EFS").replace("\\", "EBS");
+      // take a substring from the escaped name if it exceeds 215 chars, this is to avoid an OS not allowing the name
+      return escapedKey.substring(Math.max(0, escapedKey.length() - 215));
     }
   }
 
