@@ -221,7 +221,7 @@ class S3ABlockOutputStream extends OutputStream implements
         LOG.error("Number of partitions in stream exceeds limit for S3: "
              + Constants.MAX_MULTIPART_COUNT +  " write may fail.");
       }
-      activeBlock = blockFactory.create(blockCount, this.blockSize, statistics);
+      activeBlock = blockFactory.create(key, blockCount, this.blockSize, statistics);
     }
     return activeBlock;
   }
@@ -318,7 +318,7 @@ class S3ABlockOutputStream extends OutputStream implements
     statistics.writeBytes(len);
     S3ADataBlocks.DataBlock block = createBlockIfNeeded();
     int written = block.write(source, offset, len);
-    int remainingCapacity = block.remainingCapacity();
+    int remainingCapacity = (int) block.remainingCapacity();
     if (written < len) {
       // not everything was written —the block has run out
       // of capacity
