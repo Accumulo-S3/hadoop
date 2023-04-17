@@ -703,7 +703,7 @@ class S3ABlockOutputStream extends OutputStream implements
   /**
    * Shared processing of Syncable operation reporting/downgrade.
    */
-  private void handleSyncableInvocation() {
+  private void handleSyncableInvocation() throws IOException {
     final UnsupportedOperationException ex
         = new UnsupportedOperationException(E_NOT_SYNCABLE);
     if (!downgradeSyncableExceptions) {
@@ -715,6 +715,7 @@ class S3ABlockOutputStream extends OutputStream implements
         key);
     // and log at debug
     LOG.debug("Downgrading Syncable call", ex);
+    flush();
   }
 
   @Override
