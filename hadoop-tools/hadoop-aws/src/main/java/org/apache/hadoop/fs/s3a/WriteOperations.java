@@ -18,15 +18,6 @@
 
 package org.apache.hadoop.fs.s3a;
 
-import javax.annotation.Nullable;
-import java.io.Closeable;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import com.amazonaws.services.s3.model.CompleteMultipartUploadResult;
 import com.amazonaws.services.s3.model.MultipartUpload;
 import com.amazonaws.services.s3.model.ObjectMetadata;
@@ -37,13 +28,22 @@ import com.amazonaws.services.s3.model.SelectObjectContentRequest;
 import com.amazonaws.services.s3.model.SelectObjectContentResult;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import com.amazonaws.services.s3.model.UploadPartResult;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathIOException;
 import org.apache.hadoop.fs.s3a.impl.PutObjectOptions;
+import org.apache.hadoop.fs.store.audit.AuditSpan;
 import org.apache.hadoop.fs.store.audit.AuditSpanSource;
 import org.apache.hadoop.util.functional.CallableRaisingIOE;
+
+import javax.annotation.Nullable;
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Operations to update the store.
@@ -312,6 +312,12 @@ public interface WriteOperations extends AuditSpanSource, Closeable {
    * @return the configuration.
    */
   Configuration getConf();
+
+  /**
+   * Get the audit span this object was created with.
+   * @return the audit span
+   */
+  AuditSpan getAuditSpan();
 
   /**
    * Create a S3 Select request for the destination path.
